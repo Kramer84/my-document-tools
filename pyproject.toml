@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "doctools"
+version = "0.1.0"
+description = "A unified CLI suite for document and LaTeX processing."
+authors = [{ name = "kramer84" }]
+requires-python = ">=3.9"
+dependencies = [
+    "argcomplete>=3.0.0",
+    "pytest",
+    "ruff",
+]
+
+[project.scripts]
+# This exposes the command 'doctools' to your terminal
+# and points it to the main() function in src/doctools/cli.py
+doctools = "doctools.cli:app"
