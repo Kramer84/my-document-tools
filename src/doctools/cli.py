@@ -5,7 +5,9 @@ from doctools.latex.labels import normalize_labels
 from doctools.latex.titles import normalize_titles
 from doctools.python.clean import clean_python
 from doctools.python.sweep import sweep_python_project
+from doctools.python.dependency_graph import generate_pydeps
 from doctools.search_string import search_strings
+
 
 app = typer.Typer(
     name="doctools",
@@ -28,6 +30,7 @@ python_app = typer.Typer(
 )
 python_app.command(name="clean")(clean_python)
 python_app.command(name="sweep")(sweep_python_project)
+python_app.command(name="graph")(generate_pydeps)
 app.add_typer(latex_app)
 app.add_typer(python_app)
 app.command(name="search")(search_strings)
