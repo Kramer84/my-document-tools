@@ -1,6 +1,8 @@
 import ast
+import io
 import subprocess
 import sys
+import tokenize
 from pathlib import Path
 from typing import List
 
@@ -8,45 +10,61 @@ import typer
 from typing_extensions import Annotated
 
 
-class DocstringStripper(ast.NodeTransformer):
-    def _strip_docstring(self, node):
-        self.generic_visit(node)
-        if (
-            hasattr(node, "body")
-            and isinstance(node.body, list)
-            and (len(node.body) > 0)
-        ):
-            first_stmt = node.body[0]
-            if (
-                isinstance(first_stmt, ast.Expr)
-                and isinstance(first_stmt.value, ast.Constant)
-                and isinstance(first_stmt.value.value, str)
-            ):
-                node.body.pop(0)
-                if len(node.body) == 0:
-                    node.body.append(ast.Pass())
-        return node
-
-    def visit_Module(self, node):
-        return self._strip_docstring(node)
-
-    def visit_ClassDef(self, node):
-        return self._strip_docstring(node)
-
-    def visit_FunctionDef(self, node):
-        return self._strip_docstring(node)
-
-    def visit_AsyncFunctionDef(self, node):
-        return self._strip_docstring(node)
-
-
 def clean_code(source_code: str, keep_docstrings: bool = False) -> str:
-    tree = ast.parse(source_code)
+    """
+    Cleans the source code by removing comments and optionally docstrings,
+    using tokenization to preserve string formatting (like multiline templates).
+    """
+    # 1. Identify the exact start and end coordinates of docstrings using AST
+    docstring_ranges = []
     if not keep_docstrings:
-        stripper = DocstringStripper()
-        tree = stripper.visit(tree)
-        ast.fix_missing_locations(tree)
-    return ast.unparse(tree)
+        try:
+            tree = ast.parse(source_code)
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module)):
+                    if (
+                        node.body
+                        and isinstance(node.body[0], ast.Expr)
+                        and isinstance(node.body[0].value, ast.Constant)
+                        and isinstance(node.body[0].value.value, str)
+                    ):
+                        expr = node.body[0]
+                        # Capture (start_line, start_col, end_line, end_col)
+                        docstring_ranges.append(
+                            (expr.lineno, expr.col_offset, expr.end_lineno, expr.end_col_offset)
+                        )
+        except SyntaxError:
+            # If the code has syntax errors, skip docstring removal and let Ruff/Python catch it later
+            pass
+
+    # 2. Tokenize the source, filtering out comments and docstrings
+    tokens = []
+    try:
+        io_obj = io.StringIO(source_code)
+        for tok in tokenize.generate_tokens(io_obj.readline):
+            # Strip all # comments
+            if tok.type == tokenize.COMMENT:
+                continue
+            
+            # Strip docstrings if they fall within the AST coordinates we found
+            if not keep_docstrings and tok.type == tokenize.STRING:
+                is_docstring = False
+                for (start_line, start_col, end_line, end_col) in docstring_ranges:
+                    if (start_line, start_col) <= tok.start and tok.end <= (end_line, end_col):
+                        is_docstring = True
+                        break
+                if is_docstring:
+                    continue
+                    
+            tokens.append(tok)
+            
+        # Reconstruct the string. Untokenize faithfully preserves your multiline strings!
+        cleaned_source = tokenize.untokenize(tokens)
+    except tokenize.TokenError:
+        # Fallback to original source if tokenization unexpectedly fails
+        cleaned_source = source_code
+
+    return cleaned_source
 
 
 def format_with_ruff(source_code: str) -> str:
@@ -110,6 +128,7 @@ def clean_python(
             target_files.append(path)
         elif path.is_dir():
             target_files.extend(path.rglob("*.py"))
+            
     for file_path in target_files:
         try:
             source = file_path.read_text(encoding="utf-8")
@@ -137,3 +156,7 @@ def clean_python(
             typer.secho(
                 f"Error processing {file_path.name}: {e}", fg=typer.colors.RED, err=True
             )
+
+
+if __name__ == "__main__":
+    typer.run(clean_python)
