@@ -8,9 +8,7 @@ from typing import List, Optional, Sequence
 import typer
 from typing_extensions import Annotated
 
-
 DEFAULT_EXCLUDES = [
-    # User-requested externals
     "beartype*",
     "numpy*",
     "matplotlib*",
@@ -21,14 +19,12 @@ DEFAULT_EXCLUDES = [
     "pytransform3d*",
     "torch*",
     "trimesh*",
-    # Common hubs that add clutter
     "typing*",
     "collections*",
 ]
 
 
 class RankDir(str, Enum):
-    """Available directions for the dependency graph layout."""
     TB = "TB"
     BT = "BT"
     LR = "LR"
@@ -41,16 +37,12 @@ def build_excludes(
     exclude_private: bool,
     extra_excludes: Sequence[str],
 ) -> List[str]:
-    """Assemble -x patterns, being careful with private targets.
 
-    If focusing a private subpackage (name starts with `_`), don't exclude it.
-    """
     patterns: List[str] = list(DEFAULT_EXCLUDES)
     patterns.extend(extra_excludes)
 
     is_private_target = bool(subpath and subpath.lstrip(".").startswith("_"))
     if exclude_private and not is_private_target:
-        # Hide private top-level subpackages and any deeper private segments
         patterns.extend([f"{package}._*", f"{package}.*._*"])
     return patterns
 
@@ -147,13 +139,7 @@ def generate_pydeps(
         ),
     ] = [],
 ) -> None:
-    """
-    Generate readable pydeps dependency graphs for Python packages.
 
-    This command robustly wraps pydeps for large projects by focusing on
-    specific subpackages, automatically hiding noisy external dependencies,
-    and handling private modules gracefully.
-    """
     target_dir = src / package
     if not target_dir.is_dir():
         typer.secho(
@@ -190,7 +176,9 @@ def generate_pydeps(
         cmd.extend(["--only", only_arg])
 
     if cluster:
-        cmd.extend(["--cluster", "--max-cluster-size", "1000", "--min-cluster-size", "2"])
+        cmd.extend(
+            ["--cluster", "--max-cluster-size", "1000", "--min-cluster-size", "2"]
+        )
 
     if excludes:
         cmd.extend(["-x", *excludes])
@@ -202,7 +190,7 @@ def generate_pydeps(
         cmd.append("--include-missing")
 
     env = os.environ.copy()
-    # Safely construct the PYTHONPATH
+
     env["PYTHONPATH"] = os.pathsep.join(
         [str(src.resolve())] + ([env["PYTHONPATH"]] if "PYTHONPATH" in env else [])
     )

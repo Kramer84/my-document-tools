@@ -1,8 +1,10 @@
 import pytest
-from doctools.cli import app
 from typer.testing import CliRunner
 
+from doctools.cli import app
+
 runner = CliRunner()
+
 
 def test_search_strings_integration(temp_workspace):
     strings_file = temp_workspace / "strings.txt"
@@ -22,23 +24,23 @@ def test_search_strings_integration(temp_workspace):
     tex_file = target_dir / "doc.tex"
     tex_file.write_text("% TODO: Write abstract\n")
 
-    # Run CLI command with wildcard
-    result = runner.invoke(app, ["search", str(strings_file), str(target_dir), "--file-pattern", "*.*"])
+    result = runner.invoke(
+        app, ["search", str(strings_file), str(target_dir), "--file-pattern", "*.*"]
+    )
 
     assert result.exit_code == 0
 
-    # Check that both strings were found
     assert "=== Results for: 'TODO' ===" in result.stdout
     assert "=== Results for: 'FIXME' ===" in result.stdout
 
-    # Check that results map to correct lines and files
     assert "main.py (Line 2)" in result.stdout
     assert "doc.tex (Line 1)" in result.stdout
     assert "main.py (Line 3)" in result.stdout
 
+
 def test_search_strings_empty_file(temp_workspace):
     strings_file = temp_workspace / "empty.txt"
-    strings_file.write_text("\n   \n")  # Just whitespace
+    strings_file.write_text("\n   \n")
     target_dir = temp_workspace / "src"
     target_dir.mkdir()
 

@@ -11,57 +11,51 @@ from typing_extensions import Annotated
 
 
 def clean_code(source_code: str, keep_docstrings: bool = False) -> str:
-    """
-    Cleans the source code by removing comments and optionally docstrings,
-    using tokenization to preserve string formatting (like multiline templates).
-    """
-    # 1. Identify the exact start and end coordinates of docstrings using AST
+
     docstring_ranges = []
     if not keep_docstrings:
         try:
             tree = ast.parse(source_code)
             for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Module)):
-                    if (
-                        node.body
-                        and isinstance(node.body[0], ast.Expr)
-                        and isinstance(node.body[0].value, ast.Constant)
-                        and isinstance(node.body[0].value.value, str)
-                    ):
-                        expr = node.body[0]
-                        # Capture (start_line, start_col, end_line, end_col)
-                        docstring_ranges.append(
-                            (expr.lineno, expr.col_offset, expr.end_lineno, expr.end_col_offset)
+                if (
+                    isinstance(node, ast.Expr)
+                    and isinstance(node.value, ast.Constant)
+                    and isinstance(node.value.value, str)
+                ):
+                    docstring_ranges.append(
+                        (
+                            node.lineno,
+                            node.col_offset,
+                            node.end_lineno,
+                            node.end_col_offset,
                         )
+                    )
         except SyntaxError:
-            # If the code has syntax errors, skip docstring removal and let Ruff/Python catch it later
             pass
 
-    # 2. Tokenize the source, filtering out comments and docstrings
     tokens = []
     try:
         io_obj = io.StringIO(source_code)
         for tok in tokenize.generate_tokens(io_obj.readline):
-            # Strip all # comments
             if tok.type == tokenize.COMMENT:
                 continue
-            
-            # Strip docstrings if they fall within the AST coordinates we found
+
             if not keep_docstrings and tok.type == tokenize.STRING:
                 is_docstring = False
-                for (start_line, start_col, end_line, end_col) in docstring_ranges:
-                    if (start_line, start_col) <= tok.start and tok.end <= (end_line, end_col):
+                for start_line, start_col, end_line, end_col in docstring_ranges:
+                    if (start_line, start_col) <= tok.start and tok.end <= (
+                        end_line,
+                        end_col,
+                    ):
                         is_docstring = True
                         break
                 if is_docstring:
                     continue
-                    
+
             tokens.append(tok)
-            
-        # Reconstruct the string. Untokenize faithfully preserves your multiline strings!
+
         cleaned_source = tokenize.untokenize(tokens)
     except tokenize.TokenError:
-        # Fallback to original source if tokenization unexpectedly fails
         cleaned_source = source_code
 
     return cleaned_source
@@ -128,7 +122,7 @@ def clean_python(
             target_files.append(path)
         elif path.is_dir():
             target_files.extend(path.rglob("*.py"))
-            
+
     for file_path in target_files:
         try:
             source = file_path.read_text(encoding="utf-8")
@@ -156,6 +150,7 @@ def clean_python(
             typer.secho(
                 f"Error processing {file_path.name}: {e}", fg=typer.colors.RED, err=True
             )
+
 
 
 if __name__ == "__main__":
