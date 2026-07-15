@@ -1,3 +1,4 @@
+
 # NumPy Docstring Style Guide
 
 This document defines the standard syntax and structure for NumPy-style docstrings. Use this guide to format, validate, and correct Python docstrings.
@@ -15,11 +16,27 @@ This document defines the standard syntax and structure for NumPy-style docstrin
 
 ---
 
+## Import Conventions
+
+The following import conventions are used throughout the NumPy source and documentation:
+
+```python
+import numpy as np
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+
+```
+
+Do not abbreviate `scipy`. There is no motivating use case to abbreviate it in the real world, so we avoid it in the documentation to avoid confusion.
+
+---
+
 ## Docstring Sections (Order is Strict)
 
 A function/method docstring should include the following sections in this exact order. Sections (except Summary and Deprecation) use an underlined heading with hyphens (`---`).
 
 ### 1. Short Summary
+
 A one-line summary describing what the function does. Do **not** mention the function name or parameter names here.
 
 ```python
@@ -28,7 +45,7 @@ def add(a, b):
 
 ```
 
-*Note: If the function signature cannot be introspected automatically (e.g., C extensions), place the exact signature as the first line of the docstring followed by a blank line.*
+Note: If the function signature cannot be introspected automatically (e.g., C extensions), place the exact signature as the first line of the docstring followed by a blank line.
 
 ### 2. Deprecation Warning
 
@@ -49,8 +66,14 @@ An optional paragraph or two clarifying the *functionality* of the code. Do not 
 Lists arguments, keywords, and their respective types.
 
 * Format: `name : type` (Note the space before and after the colon).
+
+
 * If a type is omitted, omit the colon.
+
+
 * Mark optional parameters with `, optional` or `, default Value`.
+
+
 
 ```text
 Parameters
@@ -139,18 +162,33 @@ func_a, func_b, func_c
 
 ```
 
+Note: If the combination of the function name and description creates a line that is too long, write the entry as two lines: the function name and colon on the first line, and the description on the next line indented by four spaces.
+
 ### 13. Notes
 
 An optional section for theoretical background, mathematical algorithms, and implementation notes.
 
 * **Math**: LaTeX equations can be added using blocks or inline syntax:
+
+
+
 ```text
 .. math:: X(e^{j\omega }) = x(n)e^{-j\omega n}
 
 ```
 
-
 Inline math uses `:math:`\omega``. Variable names inside math blocks should use `\mathtt{var}`. Keep math sparse for terminal readability.
+
+* **Images**: Images are allowed but should not be central to the explanation. Include them using standard reST markup:
+
+
+
+```text
+.. image:: filename
+
+```
+
+where filename is relative to the reference guide source directory.
 
 ### 14. References
 
@@ -163,14 +201,27 @@ References
 
 ```
 
+Warning: Referencing citations (like `[1]`) within markdown/reST tables inside a numpydoc docstring will break the table markup.
+
 ### 15. Examples
 
 An optional but highly recommended section using standard Python `doctest` format (`>>>`).
 
 * Separate individual examples with blank lines.
+
+
 * Put a blank line before and after explanatory comments.
+
+
 * Use `... ` for multi-line code blocks.
+
+
 * Append `#random` for non-deterministic or platform-dependent output values.
+
+
+* Examples in *numpy* assume that `import numpy as np` is executed beforehand. All other imports, including `matplotlib.pyplot as plt` or the demonstrated function itself, must be explicitly imported.
+
+
 
 ```text
 Examples
@@ -192,8 +243,20 @@ array([[ 6,  8],
 ## Documenting Classes
 
 * **Class Docstring**: Use the exact same structural sections as functions (except `Returns`).
-* **Constructor (`__init__`)**: Document constructor arguments within the **Parameters** section of the *Class* docstring. Do **not** list `self`.
+
+
+* **Constructor (`__init__`)**: Document constructor arguments within the **Parameters** section of the *Class* docstring. Do **not** list `self`. Optionally, a docstring for `__init__` can be added to provide detailed initialization details.
+
+
 * **Attributes Section**: Placed directly below the `Parameters` section to describe non-method variables.
+
+
+* Attributes that are properties and have their own docstrings can be listed by name only, without a description.
+
+
+
+
+
 ```text
 Attributes
 ----------
@@ -204,8 +267,32 @@ imag : float
 
 ```
 
-
 * **Methods Section**: Optional. Only use it to summarize the public API if the class has an overwhelming number of methods. Never include private methods (methods starting with `_`).
+
+
+* If you need to explain a private method, refer to it in the **Extended Summary** or **Notes** section, but do not list it here.
+
+
+
+
+
+### Method Docstrings
+
+* Document methods exactly like other functions. Do not include `self` in the parameter list.
+
+
+* If a method has an equivalent function, the method docstring should refer to it. Only include a brief summary and a **See Also** section in the method docstring, using a **Returns** or **Yields** section as appropriate.
+
+
+
+### Documenting Class Instances
+
+* **Single Instance**: If only a single instance of a class is exposed, document the class itself and use the instance name in examples.
+
+
+* **Multiple Instances**: If multiple instances are exposed, write docstrings for each instance and assign them to the instances' `__doc__` attributes at run time. The class is documented as usual, and the exposed instances are mentioned in the **Notes** and **See Also** sections.
+
+
 
 ---
 
@@ -223,14 +310,31 @@ Every module must start with a docstring containing at least a summary line. Fol
 6. References
 7. Examples
 
-*Note: Author and license information belong in source code comments, never inside the docstring.*
+Note: Author and license information belong in source code comments, never inside the docstring.
 
 ### Constants
 
-Document constants using applicable function sections in this order:
+Constants should use the applicable function sections in this order:
 
 1. Summary
-2. Extended Summary
-3. See Also
-4. References
-5. Examples
+2. Extended Summary (optional)
+3. See Also (optional)
+4. References (optional)
+5. Examples (optional)
+
+Note: Docstrings for constants are not visible in text terminals (as constants are of immutable types, meaning docstrings cannot be dynamically assigned to them). However, they will appear in documentation built with Sphinx.
+
+---
+
+## Other Points to Keep in Mind
+
+* **array_like**: For arguments that take not only `ndarray` but also scalar or sequence types that can be converted to an ndarray, document the parameter type as `array_like`.
+
+
+* **Links**: Standard links inside single backticks should render as hyperlinks. If Sphinx issues "Unknown target name" warnings in non-standard reST sections, avoid standard link target blocks. Instead, use the inline hyperlink form:
+
+
+```text
+`Example [http://www.example.com](http://www.example.com)`_
+
+```
