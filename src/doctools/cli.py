@@ -6,6 +6,7 @@ from doctools.latex.titles import normalize_titles
 from doctools.python.clean import clean_python
 from doctools.python.dependency_graph import generate_pydeps
 from doctools.python.sweep import sweep_python_project
+from doctools.python.nb2llm import nb2llm
 from doctools.search_string import search_strings
 
 app = typer.Typer(
@@ -30,6 +31,7 @@ python_app = typer.Typer(
 python_app.command(name="clean")(clean_python)
 python_app.command(name="sweep")(sweep_python_project)
 python_app.command(name="graph")(generate_pydeps)
+python_app.command(name="nb2llm", help="Convert Jupyter Notebooks to LLM-friendly Markdown.")(nb2llm)
 app.add_typer(latex_app)
 app.add_typer(python_app)
 app.command(name="search")(search_strings)

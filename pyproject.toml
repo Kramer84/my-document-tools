@@ -12,6 +12,9 @@ dependencies = [
     "argcomplete>=3.0.0",
     "pytest",
     "ruff",
+    "typer",
+    "nbformat",
+    "nbconvert"
 ]
 
 [project.scripts]
