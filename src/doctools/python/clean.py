@@ -10,7 +10,7 @@ import typer
 from typing_extensions import Annotated
 
 
-def clean_code(source_code: str, keep_docstrings: bool = False) -> str:
+def clean_code(source_code: str, keep_docstrings: bool = False, keep_new_lines: bool = False) -> str:
 
     docstring_ranges = []
     if not keep_docstrings:
@@ -55,6 +55,17 @@ def clean_code(source_code: str, keep_docstrings: bool = False) -> str:
             tokens.append(tok)
 
         cleaned_source = tokenize.untokenize(tokens)
+
+        if not keep_new_lines:
+            tokens_no_blank_lines = []
+            io_obj_2 = io.StringIO(cleaned_source)
+            for tok in tokenize.generate_tokens(io_obj_2.readline):
+                if tok.type == tokenize.NL and not tok.line.strip():
+                    continue
+                tokens_no_blank_lines.append(tok)
+
+            cleaned_source = tokenize.untokenize(tokens_no_blank_lines)
+
     except tokenize.TokenError:
         cleaned_source = source_code
 
@@ -115,6 +126,12 @@ def clean_python(
             "--keep-docstrings", help="Preserve docstrings (only removes # comments)."
         ),
     ] = False,
+    keep_new_lines: Annotated[
+        bool,
+        typer.Option(
+            "--keep-new-lines", help="Preserve all non logical new lines."
+        ),
+    ] = False,
 ):
     target_files: List[Path] = []
     for path in files:
@@ -126,7 +143,7 @@ def clean_python(
     for file_path in target_files:
         try:
             source = file_path.read_text(encoding="utf-8")
-            cleaned_source = clean_code(source, keep_docstrings)
+            cleaned_source = clean_code(source, keep_docstrings, keep_new_lines)
             formatted_source = format_with_ruff(cleaned_source)
             if in_place:
                 if backup:
