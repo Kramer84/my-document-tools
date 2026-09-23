@@ -1,4 +1,3 @@
-import ast
 import io
 import subprocess
 import sys
@@ -10,96 +9,66 @@ import typer
 from typing_extensions import Annotated
 
 
-def clean_code(source_code: str, keep_docstrings: bool = False, keep_new_lines: bool = False) -> str:
+def strip_comments_and_docstrings(source_code: str, keep_docstrings: bool = False) -> str:
+    """Strips comments and optionally docstrings using token re-emission
 
-    docstring_ranges = []
-    if not keep_docstrings:
-        try:
-            tree = ast.parse(source_code)
-            for node in ast.walk(tree):
-                if (
-                    isinstance(node, ast.Expr)
-                    and isinstance(node.value, ast.Constant)
-                    and isinstance(node.value.value, str)
-                ):
-                    docstring_ranges.append(
-                        (
-                            node.lineno,
-                            node.col_offset,
-                            node.end_lineno,
-                            node.end_col_offset,
-                        )
-                    )
-        except SyntaxError:
-            pass
+    rather than coordinate-dependent untokenize.
+    """
+    io_obj = io.StringIO(source_code)
+    out_tokens = []
 
-    tokens = []
     try:
-        io_obj = io.StringIO(source_code)
-        for tok in tokenize.generate_tokens(io_obj.readline):
-            if tok.type == tokenize.COMMENT:
+        token_gen = tokenize.generate_tokens(io_obj.readline)
+        prev_toktype = tokenize.INDENT
+        first_token = True
+
+        for tok in token_gen:
+            tok_type, tok_val, _, _, _ = tok
+
+            # Drop comments
+            if tok_type == tokenize.COMMENT:
                 continue
 
-            if not keep_docstrings and tok.type == tokenize.STRING:
-                is_docstring = False
-                for start_line, start_col, end_line, end_col in docstring_ranges:
-                    if (start_line, start_col) <= tok.start and tok.end <= (
-                        end_line,
-                        end_col,
-                    ):
-                        is_docstring = True
-                        break
-                if is_docstring:
+            # Identify docstrings: standalone STRING tokens following INDENT, NEWLINE, or at BOF
+            if not keep_docstrings and tok_type == tokenize.STRING:
+                if first_token or prev_toktype in (tokenize.INDENT, tokenize.NEWLINE, tokenize.NL):
                     continue
 
-            tokens.append(tok)
+            out_tokens.append((tok_type, tok_val))
+            if tok_type not in (tokenize.NL, tokenize.COMMENT):
+                prev_toktype = tok_type
+            first_token = False
 
-        cleaned_source = tokenize.untokenize(tokens)
-
-        if not keep_new_lines:
-            tokens_no_blank_lines = []
-            io_obj_2 = io.StringIO(cleaned_source)
-            for tok in tokenize.generate_tokens(io_obj_2.readline):
-                if tok.type == tokenize.NL and not tok.line.strip():
-                    continue
-                tokens_no_blank_lines.append(tok)
-
-            cleaned_source = tokenize.untokenize(tokens_no_blank_lines)
-
+        result = tokenize.untokenize(out_tokens)
+        return result
     except tokenize.TokenError:
-        cleaned_source = source_code
-
-    return cleaned_source
+        return source_code
 
 
 def format_with_ruff(source_code: str) -> str:
-    try:
-        process_check = subprocess.run(
-            ["ruff", "check", "--select", "I", "--fix", "-"],
-            input=source_code,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-        sorted_code = process_check.stdout
-        process_format = subprocess.run(
-            ["ruff", "format", "-"],
-            input=sorted_code,
-            text=True,
-            capture_output=True,
-            check=True,
-        )
-        formatted_code = process_format.stdout
-        if '\nif __name__ == "__main__":' in formatted_code:
-            formatted_code = formatted_code.replace(
-                '\nif __name__ == "__main__":', '\n\nif __name__ == "__main__":'
-            )
-        return formatted_code.rstrip() + "\n"
-    except subprocess.CalledProcessError as e:
-        typer.secho(
-            f"Ruff formatting failed: {e.stderr}", fg=typer.colors.YELLOW, err=True
-        )
-        return source_code
+    # 1. Sort imports
+    check_proc = subprocess.run(
+        ["ruff", "check", "--select", "I", "--fix", "-"],
+        input=source_code,
+        text=True,
+        capture_output=True,
+    )
+    if check_proc.returncode != 0:
+        raise RuntimeError(f"Ruff sort failed: {check_proc.stderr}")
+
+    sorted_code = check_proc.stdout
+
+    # 2. Format code and remove excess blank lines
+    fmt_proc = subprocess.run(
+        ["ruff", "format", "-"],
+        input=sorted_code,
+        text=True,
+        capture_output=True,
+    )
+    if fmt_proc.returncode != 0:
+        raise RuntimeError(f"Ruff format failed: {fmt_proc.stderr}")
+
+    return fmt_proc.stdout
 
 
 def clean_python(
@@ -126,12 +95,6 @@ def clean_python(
             "--keep-docstrings", help="Preserve docstrings (only removes # comments)."
         ),
     ] = False,
-    keep_new_lines: Annotated[
-        bool,
-        typer.Option(
-            "--keep-new-lines", help="Preserve all non logical new lines."
-        ),
-    ] = False,
 ):
     target_files: List[Path] = []
     for path in files:
@@ -143,31 +106,22 @@ def clean_python(
     for file_path in target_files:
         try:
             source = file_path.read_text(encoding="utf-8")
-            cleaned_source = clean_code(source, keep_docstrings, keep_new_lines)
-            formatted_source = format_with_ruff(cleaned_source)
+            cleaned = strip_comments_and_docstrings(source, keep_docstrings=keep_docstrings)
+            formatted = format_with_ruff(cleaned)
+
             if in_place:
                 if backup:
                     backup_path = file_path.with_suffix(file_path.suffix + ".bak")
                     backup_path.write_text(source, encoding="utf-8")
-                file_path.write_text(formatted_source, encoding="utf-8")
-                typer.secho(
-                    f"Successfully cleaned: {file_path.name}", fg=typer.colors.GREEN
-                )
+                file_path.write_text(formatted, encoding="utf-8")
+                typer.secho(f"Successfully cleaned: {file_path.name}", fg=typer.colors.GREEN)
             else:
                 if len(target_files) > 1:
                     typer.secho(f"# --- {file_path.name} ---", fg=typer.colors.BLUE)
-                typer.echo(formatted_source)
-        except SyntaxError as e:
-            typer.secho(
-                f"Syntax Error in {file_path.name}: Cannot parse invalid Python code. ({e})",
-                fg=typer.colors.RED,
-                err=True,
-            )
-        except Exception as e:
-            typer.secho(
-                f"Error processing {file_path.name}: {e}", fg=typer.colors.RED, err=True
-            )
+                typer.echo(formatted)
 
+        except Exception as e:
+            typer.secho(f"Skipping {file_path.name} due to error: {e}", fg=typer.colors.RED, err=True)
 
 
 if __name__ == "__main__":
