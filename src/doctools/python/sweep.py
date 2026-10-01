@@ -55,6 +55,7 @@ def sweep_python_project(
             fg=typer.colors.GREEN,
         )
         return
+    targets_to_delete = sorted(set(targets_to_delete))
     typer.secho(
         f"Found {len(targets_to_delete)} artifact(s) to remove in '{project_root.name}':\n",
         fg=typer.colors.CYAN,
@@ -66,7 +67,7 @@ def sweep_python_project(
         typer.secho("Dry run complete. No files were deleted.", fg=typer.colors.YELLOW)
         return
     if not force:
-        confirm = typer.confirm("Are you sure you want to delete these items?")
+        confirm = typer.confirm("Are you sure you want to delete these items?", default=True)
         if not confirm:
             typer.secho("Operation aborted.", fg=typer.colors.RED)
             raise typer.Exit()
